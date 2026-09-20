@@ -9,14 +9,17 @@ import time
 from datetime import datetime, timedelta
 
 from . import config, db
-from .analysis import engine
+from .analysis import discovery_engine, engine
 from .push import service as push_service
 
 logger = logging.getLogger(__name__)
 
 _stop_event = threading.Event()
 _thread = None
+_discovery_thread = None
 _last_scan_summary = {"started_at": None, "finished_at": None, "results": {}}
+_last_discovery_summary = {"started_at": None, "finished_at": None, "discovered": []}
+_last_discovery_slot = None  # (date_str, hour) of the last completed discovery scan
 
 
 def run_full_scan() -> dict:
@@ -105,6 +108,42 @@ def get_last_scan_summary() -> dict:
     return _last_scan_summary
 
 
+def run_discovery_scan_and_alert() -> dict:
+    """Runs the broad-market discovery scan and pushes a DISCOVERY alert for anything new."""
+    summary = {"started_at": datetime.utcnow().isoformat(), "finished_at": None, "discovered": []}
+    try:
+        result = discovery_engine.run_discovery_scan()
+    except Exception:
+        logger.exception("discovery scan failed")
+        summary["finished_at"] = datetime.utcnow().isoformat()
+        global _last_discovery_summary
+        _last_discovery_summary = summary
+        return summary
+
+    for item in result.get("discovered", []):
+        symbol = item["symbol"]
+        score = item["composite_score"]
+        if not _cooldown_ok(symbol, "DISCOVERY"):
+            continue
+        discovery = db.get_discovery(symbol)
+        display = (discovery or {}).get("display_name") or symbol
+        reasons = ", ".join(((discovery or {}).get("scan", {}).get("technical_reasons") or [])[:3])
+        title = f"🔎 גילוי חדש: {display} ({score:.0f}/100)"
+        body = f"מניה שלא ברשימת המעקב שלך עם פוטנציאל גבוה. {reasons}"
+        _send_and_log(symbol, "DISCOVERY", title, body, score)
+        summary["discovered"].append(item)
+
+    summary["finished_at"] = datetime.utcnow().isoformat()
+    summary["universe_size"] = result.get("universe_size")
+    summary["candidates_analyzed"] = result.get("candidates_analyzed")
+    _last_discovery_summary = summary
+    return summary
+
+
+def get_last_discovery_summary() -> dict:
+    return _last_discovery_summary
+
+
 def _within_active_hours() -> bool:
     hour = datetime.now().hour
     start, end = config.SCAN_ACTIVE_HOUR_START, config.SCAN_ACTIVE_HOUR_END
@@ -130,13 +169,38 @@ def _loop():
         _stop_event.wait(config.SCAN_INTERVAL_MINUTES * 60)
 
 
+def _discovery_loop():
+    """
+    Wakes periodically and runs the broad-market discovery scan once per configured
+    UTC hour slot (config.DISCOVERY_SCAN_HOURS_UTC), so it fires ~twice a day without
+    needing a full cron scheduler.
+    """
+    global _last_discovery_slot
+    logger.info("discovery scheduler thread started (hours UTC: %s)", config.DISCOVERY_SCAN_HOURS_UTC)
+    check_interval_seconds = 20 * 60
+    while not _stop_event.is_set():
+        if config.DISCOVERY_ENABLED:
+            now = datetime.utcnow()
+            slot = (now.strftime("%Y-%m-%d"), now.hour)
+            if now.hour in config.DISCOVERY_SCAN_HOURS_UTC and slot != _last_discovery_slot:
+                try:
+                    run_discovery_scan_and_alert()
+                except Exception:
+                    logger.exception("discovery loop iteration failed")
+                _last_discovery_slot = slot
+
+        _stop_event.wait(check_interval_seconds)
+
+
 def start_background_scheduler():
-    global _thread
-    if _thread and _thread.is_alive():
-        return
+    global _thread, _discovery_thread
     _stop_event.clear()
-    _thread = threading.Thread(target=_loop, name="scan-scheduler", daemon=True)
-    _thread.start()
+    if not (_thread and _thread.is_alive()):
+        _thread = threading.Thread(target=_loop, name="scan-scheduler", daemon=True)
+        _thread.start()
+    if not (_discovery_thread and _discovery_thread.is_alive()):
+        _discovery_thread = threading.Thread(target=_discovery_loop, name="discovery-scheduler", daemon=True)
+        _discovery_thread.start()
 
 
 def stop_background_scheduler():

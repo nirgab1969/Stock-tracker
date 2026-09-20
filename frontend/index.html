@@ -65,6 +65,16 @@
 
     <section class="card panel">
       <div class="panel-header">
+        <h2>🔎 גילויים חדשים</h2>
+        <button id="btnDiscoveryScan" class="link-btn">סרוק שוק עכשיו</button>
+      </div>
+      <p class="muted">מניות בעלות פוטנציאל גבוה שנמצאו בסריקה רחבה (S&P 500 + ת"א 125), שאינן ברשימת המעקב שלך.</p>
+      <div id="discoveriesGrid" class="grid"></div>
+      <p id="discoveriesEmptyState" class="muted hidden">עדיין לא נמצאו גילויים חדשים. הסריקה הרחבה רצה אוטומטית פעמיים ביום.</p>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-header">
         <h2>היסטוריית התראות</h2>
         <button id="btnRefreshAlerts" class="link-btn">רענן</button>
       </div>
@@ -105,6 +115,26 @@
         <div class="card-actions">
           <button class="link-btn btn-edit-position">עדכן פוזיציה</button>
           <button class="link-btn btn-remove">הסר</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template id="discoveryCardTemplate">
+    <article class="stock-card">
+      <div class="stock-card-head">
+        <div>
+          <div class="stock-symbol"></div>
+          <div class="stock-name muted"></div>
+        </div>
+        <div class="score-badge"></div>
+      </div>
+      <ul class="reasons"></ul>
+      <div class="card-footer">
+        <span class="updated-at muted"></span>
+        <div class="card-actions">
+          <button class="link-btn btn-promote">➕ הוסף למעקב</button>
+          <button class="link-btn btn-dismiss">✖ התעלם</button>
         </div>
       </div>
     </article>

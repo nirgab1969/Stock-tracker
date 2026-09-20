@@ -77,6 +77,39 @@ def get_alerts():
     return jsonify(db.recent_alerts(limit))
 
 
+# ---------- discovery (broad-market scan beyond your watchlist) ----------
+
+@api_bp.get("/discoveries")
+def get_discoveries():
+    status = request.args.get("status", "new")
+    return jsonify({
+        "items": db.list_discoveries(status=status if status != "all" else None),
+        "last_scan": scheduler.get_last_discovery_summary(),
+    })
+
+
+@api_bp.post("/discoveries/<symbol>/promote")
+def promote_discovery(symbol):
+    discovery = db.get_discovery(symbol)
+    if not discovery:
+        return jsonify({"error": "not found"}), 404
+    db.add_symbol(symbol=symbol.upper(), display_name=discovery.get("display_name"), market=discovery.get("market", "US"))
+    db.set_discovery_status(symbol, "promoted")
+    return jsonify({"ok": True})
+
+
+@api_bp.post("/discoveries/<symbol>/dismiss")
+def dismiss_discovery(symbol):
+    db.set_discovery_status(symbol, "dismissed")
+    return jsonify({"ok": True})
+
+
+@api_bp.post("/discovery-scan")
+def trigger_discovery_scan():
+    summary = scheduler.run_discovery_scan_and_alert()
+    return jsonify(summary)
+
+
 # ---------- push ----------
 
 @api_bp.get("/push/vapid-public-key")

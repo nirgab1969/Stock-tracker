@@ -60,6 +60,44 @@ def get_history(symbol: str) -> pd.DataFrame:
     return _get_history_raw(symbol)
 
 
+def get_history_batch(symbols: list) -> dict:
+    """
+    Fetches OHLCV history for many symbols as efficiently as possible - used by the
+    discovery scanner's stage 1 (technical-only pre-filter over a whole index).
+    Returns {symbol: DataFrame}; symbols that fail to fetch are simply omitted.
+    """
+    if HAVE_YFINANCE and symbols:
+        try:
+            raw = yf.download(
+                tickers=symbols, period=config.PRICE_HISTORY_RANGE, interval=config.PRICE_HISTORY_INTERVAL,
+                group_by="ticker", threads=True, progress=False, auto_adjust=False,
+            )
+            out = {}
+            for sym in symbols:
+                try:
+                    sub = raw[sym] if len(symbols) > 1 else raw
+                    sub = sub.rename(columns=str.lower).dropna()
+                    if not sub.empty and len(sub) >= 30:
+                        out[sym] = sub[["open", "high", "low", "close", "volume"]]
+                except Exception:
+                    continue
+            if out:
+                return out
+        except Exception as e:
+            logger.warning("yfinance batch download failed (%s), falling back to one-by-one", e)
+
+    # Fallback: sequential raw calls (slower, but the discovery scan only runs a couple
+    # times a day so this is an acceptable worst case when yfinance isn't installed).
+    out = {}
+    for sym in symbols:
+        try:
+            out[sym] = _get_history_raw(sym)
+        except MarketDataError:
+            continue
+        sleep_between_requests()
+    return out
+
+
 def _get_history_raw(symbol: str) -> pd.DataFrame:
     try:
         resp = _session.get(

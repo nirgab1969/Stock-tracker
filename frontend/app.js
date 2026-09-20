@@ -216,6 +216,62 @@ async function loadAlerts() {
     : `<li class="muted">אין עדיין התראות</li>`;
 }
 
+// ---------------- Discoveries (broad-market scan) ----------------
+
+function renderDiscoveryCard(item) {
+  const tpl = document.getElementById("discoveryCardTemplate");
+  const node = tpl.content.cloneNode(true);
+  const scan = item.scan || {};
+
+  node.querySelector(".stock-symbol").textContent = item.symbol;
+  node.querySelector(".stock-name").textContent = item.display_name || "";
+
+  const scoreEl = node.querySelector(".score-badge");
+  scoreEl.textContent = Math.round(item.composite_score);
+  scoreEl.className = `score-badge ${scoreClass(item.composite_score)}`;
+
+  const reasonsEl = node.querySelector(".reasons");
+  const reasons = (scan.technical_reasons || []).slice(0, 4);
+  reasonsEl.innerHTML = reasons.map((r) => `<li>${r}</li>`).join("") || "<li>ניקוד גבוה בניתוח המשוקלל</li>";
+
+  node.querySelector(".updated-at").textContent = item.discovered_at
+    ? `התגלה: ${new Date(item.discovered_at + "Z").toLocaleString("he-IL")}`
+    : "";
+
+  node.querySelector(".btn-promote").addEventListener("click", async () => {
+    await fetch(`${API}/discoveries/${item.symbol}/promote`, { method: "POST" });
+    banner(`${item.symbol} נוסף לרשימת המעקב שלך`, "success");
+    loadDiscoveries();
+    loadDashboard();
+  });
+
+  node.querySelector(".btn-dismiss").addEventListener("click", async () => {
+    await fetch(`${API}/discoveries/${item.symbol}/dismiss`, { method: "POST" });
+    loadDiscoveries();
+  });
+
+  return node;
+}
+
+async function loadDiscoveries() {
+  const res = await (await fetch(`${API}/discoveries`)).json();
+  const grid = document.getElementById("discoveriesGrid");
+  grid.innerHTML = "";
+  document.getElementById("discoveriesEmptyState").classList.toggle("hidden", res.items.length > 0);
+  res.items.forEach((item) => grid.appendChild(renderDiscoveryCard(item)));
+}
+
+document.getElementById("btnDiscoveryScan").addEventListener("click", async () => {
+  banner("סורק את כל השוק (S&P 500 + ת\"א 125)... זה יכול לקחת כמה דקות.", "info", 10000);
+  try {
+    const res = await (await fetch(`${API}/discovery-scan`, { method: "POST" })).json();
+    banner(`הסריקה הסתיימה - נמצאו ${res.discovered.length} מניות חדשות עם פוטנציאל`, "success");
+  } catch (err) {
+    banner("הסריקה נכשלה, נסה שוב", "error");
+  }
+  loadDiscoveries();
+});
+
 // ---------------- Add form ----------------
 
 document.getElementById("fInPosition").addEventListener("change", (e) => {
@@ -273,4 +329,6 @@ document.getElementById("btnRefreshAlerts").addEventListener("click", loadAlerts
 initServiceWorker();
 loadDashboard();
 loadAlerts();
+loadDiscoveries();
 setInterval(loadDashboard, 60000);
+setInterval(loadDiscoveries, 120000);

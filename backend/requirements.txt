@@ -6,6 +6,7 @@ numpy>=1.24
 cryptography>=42.0
 PyJWT>=2.8
 python-dotenv>=1.0
+lxml>=5.0          # needed by pandas.read_html() - used by the discovery scanner to fetch the S&P 500 list
 
 # Optional - improves news sentiment scoring quality if installed.
 # If missing, the app automatically falls back to a built-in lexicon scorer.

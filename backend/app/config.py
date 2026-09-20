@@ -46,6 +46,18 @@ HIGH_POTENTIAL_SCORE_THRESHOLD = float(os.environ.get("HIGH_POTENTIAL_SCORE_THRE
 # Minimum hours between two alerts of the same type for the same ticker (avoid spamming).
 ALERT_COOLDOWN_HOURS = float(os.environ.get("ALERT_COOLDOWN_HOURS", "12"))
 
+# --- Discovery scanner: broad-market screen beyond your own watchlist ---
+DISCOVERY_ENABLED = os.environ.get("DISCOVERY_ENABLED", "1") == "1"
+# Which universes to combine. "SP500" is fetched live (weekly cache); "TA125" is a static snapshot
+# (see app/data/ta125_fallback.json).
+DISCOVERY_UNIVERSE = [u.strip() for u in os.environ.get("DISCOVERY_UNIVERSE", "SP500,TA125").split(",") if u.strip()]
+# UTC hours to run the broad scan (runs use DAILY candles regardless, so exact timing mostly just
+# needs to land twice a day - default is roughly Israel morning / TASE close).
+DISCOVERY_SCAN_HOURS_UTC = [int(h) for h in os.environ.get("DISCOVERY_SCAN_HOURS_UTC", "6,13").split(",")]
+# Stage 1 (technical-only, whole universe) keeps only the top N candidates for the full
+# technical+fundamental+sentiment analysis in stage 2 - keeps the scan fast and API-friendly.
+DISCOVERY_STAGE1_TOP_N = int(os.environ.get("DISCOVERY_STAGE1_TOP_N", "25"))
+
 # Technical thresholds tuned for swing trading
 RSI_OVERSOLD = 35
 RSI_OVERBOUGHT = 68

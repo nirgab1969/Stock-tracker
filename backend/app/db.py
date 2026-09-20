@@ -5,6 +5,8 @@ Tables:
   push_subscriptions - browser Web Push subscriptions (one per installed device/browser)
   alert_log          - history of alerts sent, used for cooldown + the "history" screen
   scan_cache         - last computed analysis per ticker, served to the dashboard instantly
+  universe_cache     - cached ticker-universe lists (e.g. S&P 500) for the discovery scanner
+  discoveries        - high-potential tickers found by the broad discovery scan (not on the watchlist)
 """
 import json
 import sqlite3
@@ -69,6 +71,23 @@ def init_db():
             CREATE TABLE IF NOT EXISTS scan_cache (
                 symbol TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,   -- JSON blob of the full analysis result
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS universe_cache (
+                key TEXT PRIMARY KEY,        -- e.g. "SP500"
+                tickers_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS discoveries (
+                symbol TEXT PRIMARY KEY,
+                display_name TEXT,
+                market TEXT DEFAULT 'US',
+                composite_score REAL,
+                payload TEXT NOT NULL,       -- JSON blob of the full analysis result
+                status TEXT DEFAULT 'new',   -- new | promoted | dismissed
+                discovered_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
             """
@@ -194,3 +213,76 @@ def all_scan_results():
             data["_updated_at"] = r["updated_at"]
             out[r["symbol"]] = data
         return out
+
+
+# ---------- universe cache (discovery scanner) ----------
+
+def get_universe_cache(key: str):
+    with get_conn() as conn:
+        row = conn.execute("SELECT tickers_json, updated_at FROM universe_cache WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        return {"tickers": json.loads(row["tickers_json"]), "updated_at": row["updated_at"]}
+
+
+def set_universe_cache(key: str, tickers: list):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO universe_cache (key, tickers_json, updated_at) VALUES (?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET tickers_json=excluded.tickers_json, updated_at=excluded.updated_at""",
+            (key, json.dumps(tickers), datetime.utcnow().isoformat()),
+        )
+
+
+# ---------- discoveries (broad-market scan results) ----------
+
+def upsert_discovery(symbol, display_name, market, composite_score, payload: dict):
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        existing = conn.execute("SELECT status, discovered_at FROM discoveries WHERE symbol=?", (symbol.upper(),)).fetchone()
+        if existing and existing["status"] == "dismissed":
+            return  # respect the user's earlier dismissal - don't resurrect it automatically
+        discovered_at = existing["discovered_at"] if existing else now
+        conn.execute(
+            """INSERT INTO discoveries (symbol, display_name, market, composite_score, payload, status, discovered_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'new', ?, ?)
+               ON CONFLICT(symbol) DO UPDATE SET
+                 display_name=excluded.display_name, market=excluded.market,
+                 composite_score=excluded.composite_score, payload=excluded.payload,
+                 updated_at=excluded.updated_at""",
+            (symbol.upper(), display_name, market, composite_score, json.dumps(payload), discovered_at, now),
+        )
+
+
+def list_discoveries(status: str = None):
+    with get_conn() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM discoveries WHERE status=? ORDER BY composite_score DESC", (status,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM discoveries ORDER BY composite_score DESC").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["scan"] = json.loads(d.pop("payload"))
+            out.append(d)
+        return out
+
+
+def get_discovery(symbol: str):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM discoveries WHERE symbol=?", (symbol.upper(),)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["scan"] = json.loads(d.pop("payload"))
+        return d
+
+
+def set_discovery_status(symbol: str, status: str):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE discoveries SET status=?, updated_at=? WHERE symbol=?",
+            (status, datetime.utcnow().isoformat(), symbol.upper()),
+        )
