@@ -1,0 +1,21 @@
+# Core (required)
+Flask>=3.0
+requests>=2.31
+pandas>=2.0
+numpy>=1.24
+cryptography>=42.0
+PyJWT>=2.8
+python-dotenv>=1.0
+
+# Optional - improves news sentiment scoring quality if installed.
+# If missing, the app automatically falls back to a built-in lexicon scorer.
+vaderSentiment>=3.3.2
+
+# Optional but recommended - yfinance handles Yahoo Finance's anti-bot / cookie
+# quirks far more robustly than raw HTTP calls. If missing, the app falls back
+# to calling Yahoo's public endpoints directly with `requests` (works, but is
+# more likely to occasionally need a retry).
+yfinance>=0.2.40
+
+# Optional - only needed for a production WSGI server (see README).
+gunicorn>=22.0

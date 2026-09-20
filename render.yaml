@@ -1,0 +1,43 @@
+# Render "Blueprint" - lets you deploy this whole app with one click via
+# Render's dashboard: "New +" -> "Blueprint" -> pick this repo.
+#
+# IMPORTANT: this defines a persistent disk so the watchlist, alert history
+# and (critically) the push notification keys survive restarts/redeploys.
+# Without it, every redeploy would silently invalidate everyone's push
+# subscriptions and they'd have to re-enable notifications.
+#
+# After importing, in the Render dashboard set this service's instance type
+# to "Starter" (or higher) - NOT Free. Render's free tier spins down after
+# 15 minutes without HTTP traffic, which would also kill the background
+# scanner thread that sends your alerts. See README.md for details.
+
+services:
+  - type: web
+    name: stock-tracker
+    runtime: python
+    plan: starter   # NOT free - free instances sleep after 15 min and would kill the scanner/alerts.
+                    # If Render's dashboard shows different plan names when you import this, just
+                    # pick the cheapest "always-on" (non-free) option - see DEPLOY.md.
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -w 1 -b 0.0.0.0:$PORT 'app:create_app()'"
+    healthCheckPath: /health
+    disk:
+      name: stock-tracker-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /var/data/stocktracker.db
+      - key: VAPID_KEYS_PATH
+        value: /var/data/vapid_keys.json
+      - key: VAPID_SUBJECT
+        value: "mailto:nirgab@gmail.com"
+      - key: SCAN_INTERVAL_MINUTES
+        value: "120"
+      - key: SCAN_ACTIVE_HOUR_START
+        value: "7"
+      - key: SCAN_ACTIVE_HOUR_END
+        value: "23"
+      - key: PYTHON_VERSION
+        value: "3.11.9"

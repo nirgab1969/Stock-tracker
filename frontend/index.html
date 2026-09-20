@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>עוקב מניות חכם</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <img src="/icons/icon-192.png" alt="" class="logo" />
+      <div>
+        <h1>עוקב מניות חכם</h1>
+        <p class="subtitle">מעקב + זיהוי פוטנציאל + איתותי כניסה/יציאה</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnNotify" class="icon-btn" title="הפעלת התראות">🔔</button>
+      <button id="btnScanNow" class="icon-btn" title="סרוק עכשיו">🔄</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="statusBanner" class="banner hidden"></section>
+
+    <section class="card panel">
+      <h2>הוספת מניה למעקב</h2>
+      <form id="addForm" class="add-form">
+        <div class="row">
+          <input id="fSymbol" placeholder="טיקר, למשל AAPL או TEVA.TA" required />
+          <input id="fName" placeholder="שם לתצוגה (אופציונלי)" />
+        </div>
+        <div class="row">
+          <select id="fMarket">
+            <option value="US">ארה"ב (US)</option>
+            <option value="TASE">תל אביב (TASE)</option>
+          </select>
+          <label class="checkbox">
+            <input type="checkbox" id="fInPosition" />
+            <span>אני מחזיק בפועל</span>
+          </label>
+        </div>
+        <div class="row" id="positionFields" style="display:none">
+          <input id="fEntryPrice" type="number" step="0.01" placeholder="מחיר כניסה" />
+          <input id="fShares" type="number" step="0.0001" placeholder="כמות מניות" />
+        </div>
+        <button type="submit" class="primary-btn">הוסף למעקב</button>
+      </form>
+      <p class="hint">מניות ישראליות (בורסת ת"א) מוזנות עם הסיומת <code>.TA</code>, למשל <code>TEVA.TA</code>, <code>POLI.TA</code>, <code>ICL.TA</code>.</p>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-header">
+        <h2>רשימת מעקב וניתוח</h2>
+        <span id="lastScanInfo" class="muted"></span>
+      </div>
+      <div id="watchlistGrid" class="grid"></div>
+      <p id="emptyState" class="muted hidden">עדיין לא הוספת מניות למעקב. הוסף מניה למעלה כדי להתחיל.</p>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-header">
+        <h2>היסטוריית התראות</h2>
+        <button id="btnRefreshAlerts" class="link-btn">רענן</button>
+      </div>
+      <ul id="alertsList" class="alerts-list"></ul>
+    </section>
+
+    <section class="card panel">
+      <h2>הגדרות</h2>
+      <div class="settings-row">
+        <span>סטטוס התראות Push:</span>
+        <span id="pushStatus" class="muted">בודק...</span>
+      </div>
+      <div class="settings-row">
+        <button id="btnTestPush" class="secondary-btn">שלח התראת בדיקה</button>
+      </div>
+      <p class="disclaimer">
+        ⚠️ כלי זה מספק ניתוח טכני/פונדמנטלי/סנטימנט אוטומטי לצורכי מידע בלבד ואינו ייעוץ השקעות.
+        קבלת החלטות מסחר היא באחריותך המלאה.
+      </p>
+    </section>
+  </main>
+
+  <template id="cardTemplate">
+    <article class="stock-card">
+      <div class="stock-card-head">
+        <div>
+          <div class="stock-symbol"></div>
+          <div class="stock-name muted"></div>
+        </div>
+        <div class="score-badge"></div>
+      </div>
+      <div class="signal-badges"></div>
+      <div class="sub-scores"></div>
+      <ul class="reasons"></ul>
+      <div class="position-info hidden"></div>
+      <div class="card-footer">
+        <span class="updated-at muted"></span>
+        <div class="card-actions">
+          <button class="link-btn btn-edit-position">עדכן פוזיציה</button>
+          <button class="link-btn btn-remove">הסר</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
