@@ -35,6 +35,12 @@ SCAN_INTERVAL_MINUTES = int(os.environ.get("SCAN_INTERVAL_MINUTES", "120"))
 SCAN_ACTIVE_HOUR_START = int(os.environ.get("SCAN_ACTIVE_HOUR_START", "7"))
 SCAN_ACTIVE_HOUR_END = int(os.environ.get("SCAN_ACTIVE_HOUR_END", "23"))
 
+# Skip both the watchlist scan and the discovery scan on Saturday and Sunday (UTC) - the
+# US markets (S&P 500) are closed both days. Note TASE actually trades Sunday, but since
+# these are daily candles and the next scan (Monday) picks up Sunday's completed session
+# anyway, the trade-off is just a one-day delay for TASE names - not lost data.
+SKIP_WEEKEND_SCANS = os.environ.get("SKIP_WEEKEND_SCANS", "1") == "1"
+
 # --- Scoring weights (must sum to 1.0) ---
 WEIGHT_TECHNICAL = float(os.environ.get("WEIGHT_TECHNICAL", "0.45"))
 WEIGHT_FUNDAMENTAL = float(os.environ.get("WEIGHT_FUNDAMENTAL", "0.30"))
