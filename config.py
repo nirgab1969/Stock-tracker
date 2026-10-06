@@ -63,11 +63,11 @@ DISCOVERY_SCAN_HOURS_UTC = [int(h) for h in os.environ.get("DISCOVERY_SCAN_HOURS
 # Stage 1 (technical-only, whole universe) keeps only the top N candidates for the full
 # technical+fundamental+sentiment analysis in stage 2 - keeps the scan fast and API-friendly.
 DISCOVERY_STAGE1_TOP_N = int(os.environ.get("DISCOVERY_STAGE1_TOP_N", "25"))
-# How many tickers' worth of 1-year daily history to hold in memory at once during stage 1.
-# Fetching all ~600+ universe tickers in a single yfinance batch call keeps every ticker's
-# full history resident in memory simultaneously, which can exceed small hosting-plan memory
-# limits (e.g. Render's 512MB Starter plan) - chunking bounds the peak memory instead.
-DISCOVERY_BATCH_CHUNK_SIZE = int(os.environ.get("DISCOVERY_BATCH_CHUNK_SIZE", "60"))
+# How many tickers' worth of 1-year daily history to hold in memory at once during stage 1
+# (both while downloading AND while scoring - see market_data.iter_history_batches). Lower
+# = less peak memory but a slower scan. 25 is deliberately conservative for Render's 512MB
+# Starter plan; raise it only if memory stays comfortably under quota after watching a scan.
+DISCOVERY_BATCH_CHUNK_SIZE = int(os.environ.get("DISCOVERY_BATCH_CHUNK_SIZE", "25"))
 
 # Technical thresholds tuned for swing trading
 RSI_OVERSOLD = 35

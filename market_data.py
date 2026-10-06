@@ -61,23 +61,37 @@ def get_history(symbol: str) -> pd.DataFrame:
     return _get_history_raw(symbol)
 
 
+def iter_history_batches(symbols: list, chunk_size: int = None):
+    """
+    Generator form of get_history_batch(): yields ONE chunk's {symbol: DataFrame} dict
+    at a time instead of accumulating the whole symbol list's history in memory at once.
+
+    Use this (not get_history_batch) for a large universe scan (the discovery scanner's
+    stage 1, hundreds of tickers) - score/use each chunk before the next one is fetched,
+    so the chunk's DataFrames can be freed before the next chunk is even downloaded. A
+    previous version of this code chunked the *download* but still collected every
+    chunk's result into one big dict before the caller processed any of it, which meant
+    all ~600+ tickers' history was resident in memory simultaneously anyway - the actual
+    cause of repeated out-of-memory restarts on Render's 512MB Starter plan.
+    """
+    chunk_size = chunk_size or getattr(config, "DISCOVERY_BATCH_CHUNK_SIZE", 25)
+    for i in range(0, len(symbols), chunk_size):
+        chunk_out = _get_history_batch_chunk(symbols[i:i + chunk_size])
+        yield chunk_out
+        del chunk_out
+        gc.collect()  # release this chunk's DataFrames before fetching the next
+
+
 def get_history_batch(symbols: list, chunk_size: int = None) -> dict:
     """
-    Fetches OHLCV history for many symbols as efficiently as possible - used by the
-    discovery scanner's stage 1 (technical-only pre-filter over a whole index).
-    Returns {symbol: DataFrame}; symbols that fail to fetch are simply omitted.
-
-    Fetches in bounded chunks rather than all symbols in one yfinance call: a single
-    batch download covering the whole universe (500+ tickers x 1 year of daily bars)
-    keeps every ticker's full history resident in memory at the same time, which can
-    exceed small hosting-plan memory limits (e.g. Render's 512MB Starter plan).
-    Chunking keeps peak memory bounded to one chunk at a time instead.
+    Convenience wrapper that accumulates every chunk from iter_history_batches() into one
+    dict. Fine for a short symbol list (e.g. a user's watchlist); for a large universe
+    scan, prefer iter_history_batches() directly so each chunk's data can be discarded
+    once used instead of all being held in memory at the same time.
     """
-    chunk_size = chunk_size or getattr(config, "DISCOVERY_BATCH_CHUNK_SIZE", 60)
     out = {}
-    for i in range(0, len(symbols), chunk_size):
-        out.update(_get_history_batch_chunk(symbols[i:i + chunk_size]))
-        gc.collect()  # release each chunk's DataFrames before fetching the next
+    for chunk in iter_history_batches(symbols, chunk_size):
+        out.update(chunk)
     return out
 
 
@@ -86,7 +100,7 @@ def _get_history_batch_chunk(symbols: list) -> dict:
         try:
             raw = yf.download(
                 tickers=symbols, period=config.PRICE_HISTORY_RANGE, interval=config.PRICE_HISTORY_INTERVAL,
-                group_by="ticker", threads=True, progress=False, auto_adjust=False,
+                group_by="ticker", threads=False, progress=False, auto_adjust=False,
             )
             out = {}
             for sym in symbols:
